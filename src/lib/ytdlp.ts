@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import { VideoInfo, VideoFormat } from '@/types';
 import { detectPlatform } from './platformDetect';
 
-export async function getVideoInfo(url: string): Promise<VideoInfo> {
+export async function getVideoInfo(url: string): Promise<VideoInfo | VideoInfo[]> {
   try {
     // Check if yt-dlp is installed
     try {
