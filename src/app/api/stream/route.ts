@@ -1,51 +1,30 @@
 import { NextRequest } from 'next/server';
-import { spawn } from 'child_process';
-import { Readable } from 'stream';
 
 export async function GET(req: NextRequest) {
-  const url = req.nextUrl.searchParams.get('url');
-  const format = req.nextUrl.searchParams.get('format');
+  const downloadUrl = req.nextUrl.searchParams.get('url');
   const title = req.nextUrl.searchParams.get('title') || 'video';
+  const filename = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
 
-  if (!url || !format) {
-    return new Response('Missing parameters', { status: 400 });
+  if (!downloadUrl) {
+    return new Response('Missing URL', { status: 400 });
   }
 
-  const ytDlp = spawn('python', [
-    '-m', 'yt_dlp',
-    '-f', format,
-    '-o', '-',
-    '--no-warnings',
-    '--no-check-certificate',
-    url
-  ]);
+  try {
+    const response = await fetch(downloadUrl);
+    
+    if (!response.ok) throw new Error('Failed to fetch video');
 
-  const stream = new Readable({
-    read() {}
-  });
-
-  ytDlp.stdout.on('data', (chunk) => {
-    stream.push(chunk);
-  });
-
-  ytDlp.stderr.on('data', (data) => {
-    console.error(`yt-dlp stderr: ${data}`);
-  });
-
-  ytDlp.on('close', (code) => {
-    if (code !== 0) {
-      console.error(`yt-dlp process exited with code ${code}`);
-    }
-    stream.push(null);
-  });
-
-  // Sanitize filename
-  const safeTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-
-  return new Response(stream as any, {
-    headers: {
-      'Content-Disposition': `attachment; filename="${safeTitle}.mp4"`,
-      'Content-Type': 'video/mp4',
-    },
-  });
+    // Create a streaming response to bypass Vercel's 4.5MB limit
+    return new Response(response.body, {
+      headers: {
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Type': 'video/mp4',
+        'Content-Length': response.headers.get('Content-Length') || '',
+        'Cache-Control': 'no-cache',
+      },
+    });
+  } catch (error) {
+    console.error('Streaming error:', error);
+    return new Response('Error streaming video', { status: 500 });
+  }
 }

@@ -40,15 +40,46 @@ export const DownloadCard: React.FC<DownloadCardProps> = ({ info, onDownload, on
 
     try {
       const format = info.formats.find(f => f.formatId === selectedFormat);
+      if (!format) throw new Error('Format not found');
+
+      const streamUrl = `/api/stream?url=${encodeURIComponent(format.url)}&title=${encodeURIComponent(info.title)}`;
+      const response = await fetch(streamUrl);
       
-      // On Vercel, we always use Direct Download because the Node environment
-      // doesn't support the yt-dlp binary and has a 4.5MB payload limit.
-      if (format) {
-        window.open(format.url, '_blank');
-        return;
+      if (!response.ok) throw new Error('Download failed');
+
+      const contentLength = response.headers.get('content-length');
+      const total = contentLength ? parseInt(contentLength, 10) : 0;
+      let loaded = 0;
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Could not read stream');
+
+      const chunks: Uint8Array[] = [];
+      while(true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        chunks.push(value);
+        loaded += value.length;
+        if (total > 0) {
+          setProgress(Math.round((loaded / total) * 100));
+        }
       }
+
+      const blob = new Blob(chunks as any);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${info.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error('Download error:', err);
+      // Final Fallback: Just open direct URL if everything else fails
+      const format = info.formats.find(f => f.formatId === selectedFormat);
+      if (format) window.open(format.url, '_blank');
     } finally {
       setIsDownloading(false);
       setProgress(0);
