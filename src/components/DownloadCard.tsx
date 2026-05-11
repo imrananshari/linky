@@ -41,52 +41,14 @@ export const DownloadCard: React.FC<DownloadCardProps> = ({ info, onDownload, on
     try {
       const format = info.formats.find(f => f.formatId === selectedFormat);
       
-      // On Vercel, large files > 4.5MB will fail via the proxy stream.
-      // We check the size and use direct download for larger files or as a fallback.
-      if (format && format.filesize && format.filesize > 4 * 1024 * 1024) {
+      // On Vercel, we always use Direct Download because the Node environment
+      // doesn't support the yt-dlp binary and has a 4.5MB payload limit.
+      if (format) {
         window.open(format.url, '_blank');
         return;
       }
-
-      const response = await fetch(`/api/stream?url=${encodeURIComponent(info.url)}&format=${selectedFormat}&title=${encodeURIComponent(info.title)}`);
-      
-      if (!response.ok) throw new Error('Download failed');
-      // ... rest of stream logic ...
-      const contentLength = response.headers.get('content-length');
-      const total = contentLength ? parseInt(contentLength, 10) : 0;
-      let loaded = 0;
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('Could not read stream');
-
-      const chunks: Uint8Array[] = [];
-      while(true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        chunks.push(value);
-        loaded += value.length;
-        if (total > 0) {
-          setProgress(Math.round((loaded / total) * 100));
-        }
-      }
-
-      const blob = new Blob(chunks as any);
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `${info.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error('Download error:', err);
-      // Fallback: Open the direct URL in a new tab if streaming fails
-      const format = info.formats.find(f => f.formatId === selectedFormat);
-      if (format) {
-        window.open(format.url, '_blank');
-      }
     } finally {
       setIsDownloading(false);
       setProgress(0);

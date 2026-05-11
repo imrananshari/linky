@@ -70,10 +70,11 @@ class handler(BaseHTTPRequestHandler):
         # Sort formats by quality (resolution)
         formats.sort(key=lambda x: x.get('quality', ''), reverse=True)
 
+        import urllib.parse
         return {
             'url': data.get('webpage_url') or original_url,
             'title': data.get('title'),
-            'thumbnail': f"/api/thumbnail?url={data.get('thumbnail')}",
+            'thumbnail': f"/api/thumbnail?url={urllib.parse.quote(data.get('thumbnail') or '')}",
             'duration': data.get('duration'),
             'formats': formats,
             'platform': 'youtube' if 'youtube' in original_url else 'social'
