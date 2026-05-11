@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Linky Video Downloader",
+  "version": "1.0",
+  "description": "Quickly download videos from social media using Linky.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "permissions": ["activeTab", "clipboardRead"]
+}
