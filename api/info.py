@@ -24,6 +24,9 @@ class handler(BaseHTTPRequestHandler):
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
         ]
+        
+        # Mask the server IP by pretending to be a random client
+        random_ip = f"{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}"
 
         ydl_opts = {
             'quiet': True,
@@ -31,13 +34,16 @@ class handler(BaseHTTPRequestHandler):
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'user_agent': random.choice(user_agents),
             'no_cache_dir': True,
+            'nocheckcertificate': True,
             'headers': {
-                'Referer': 'https://www.instagram.com/',
-                'Origin': 'https://www.instagram.com',
+                'X-Forwarded-For': random_ip,
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://www.google.com/',
+                'Origin': 'https://www.google.com',
             },
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['ios', 'android'],
+                    'player_client': ['android', 'ios', 'web_embedded'],
                     'skip': ['dash', 'hls']
                 },
                 'instagram': {
