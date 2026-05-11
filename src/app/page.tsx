@@ -73,7 +73,7 @@ export default function Home() {
     setSuccess(null);
 
     try {
-      const response = await axios.post('/api/download', { url: urls[0] });
+      const response = await axios.post('/api/info', { url: urls[0] });
       const data = response.data;
       
       const newResults: VideoInfo[] = [];
