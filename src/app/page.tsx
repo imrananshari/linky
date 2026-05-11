@@ -96,40 +96,66 @@ export default function Home() {
         setUrl(''); // Clear input after success
       }
     } catch (err: any) {
-      // CLIENT-SIDE FALLBACK FOR INSTAGRAM RATE-LIMITS
-      if (urls[0].includes('instagram.com')) {
+      // CLIENT-SIDE FALLBACK FOR INSTAGRAM AND YOUTUBE
+      if (urls[0].includes('instagram.com') || urls[0].includes('youtube.com') || urls[0].includes('youtu.be')) {
         try {
-          // Use a CORS proxy to fetch Instagram HTML directly in the browser
+          setLoading(true);
           const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(urls[0])}`;
           const res = await axios.get(proxyUrl);
           const html = res.data;
 
-          // Extract metadata from Instagram's JSON/HTML
-          const videoUrlMatch = html.match(/"video_url":"([^"]+)"/);
-          const titleMatch = html.match(/<title>(.*?)<\/title>/);
-          const thumbMatch = html.match(/"display_url":"([^"]+)"/);
+          // Instagram Extraction
+          if (urls[0].includes('instagram.com')) {
+            const videoUrlMatch = html.match(/"video_url":"([^"]+)"/);
+            if (videoUrlMatch) {
+              const videoUrl = videoUrlMatch[1].replace(/\\u0026/g, '&');
+              const thumbMatch = html.match(/"display_url":"([^"]+)"/);
+              const titleMatch = html.match(/<title>(.*?)<\/title>/);
+              
+              setResults([{
+                url: urls[0],
+                title: titleMatch ? titleMatch[1] : 'Instagram Video',
+                thumbnail: thumbMatch ? thumbMatch[1].replace(/\\u0026/g, '&') : '',
+                duration: 0,
+                formats: [{ formatId: 'mp4', quality: 'High Quality', ext: 'mp4', filesize: null, url: videoUrl }],
+                platform: 'instagram'
+              }]);
+              setSuccess('Found Instagram video (Browser Mode)');
+              return;
+            }
+          }
 
-          if (videoUrlMatch) {
-            const videoUrl = videoUrlMatch[1].replace(/\\u0026/g, '&');
-            const thumbUrl = thumbMatch ? thumbMatch[1].replace(/\\u0026/g, '&') : '';
-            
-            const clientResult: VideoInfo = {
-              url: urls[0],
-              title: titleMatch ? titleMatch[1] : 'Instagram Video',
-              thumbnail: thumbUrl,
-              duration: 0,
-              formats: [{
-                formatId: 'mp4',
-                quality: 'High Quality',
-                ext: 'mp4',
-                filesize: null,
-                url: videoUrl
-              }],
-              platform: 'instagram'
-            };
-            setResults([clientResult]);
-            setSuccess('Found Instagram video (Browser Mode)');
-            return;
+          // YouTube Extraction (Browser Fallback)
+          if (urls[0].includes('youtube.com') || urls[0].includes('youtu.be')) {
+            const playerResponseMatch = html.match(/ytInitialPlayerResponse\s*=\s*({.*?});/);
+            if (playerResponseMatch) {
+              const playerResponse = JSON.parse(playerResponseMatch[1]);
+              const videoDetails = playerResponse.videoDetails;
+              const streamingData = playerResponse.streamingData;
+              
+              // Get best format (simplified for browser extraction)
+              const formats = streamingData.formats || [];
+              const bestFormat = formats[formats.length - 1];
+
+              if (bestFormat && bestFormat.url) {
+                setResults([{
+                  url: urls[0],
+                  title: videoDetails.title,
+                  thumbnail: videoDetails.thumbnail.thumbnails[0].url,
+                  duration: parseInt(videoDetails.lengthSeconds),
+                  formats: formats.map((f: any) => ({
+                    formatId: f.itag.toString(),
+                    quality: f.qualityLabel || 'Standard',
+                    ext: 'mp4',
+                    filesize: parseInt(f.contentLength) || null,
+                    url: f.url
+                  })),
+                  platform: 'youtube'
+                }]);
+                setSuccess('Found YouTube video (Browser Mode)');
+                return;
+              }
+            }
           }
         } catch (fallbackErr) {
           console.error('Browser extraction failed:', fallbackErr);
