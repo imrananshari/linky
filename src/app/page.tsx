@@ -96,6 +96,46 @@ export default function Home() {
         setUrl(''); // Clear input after success
       }
     } catch (err: any) {
+      // CLIENT-SIDE FALLBACK FOR INSTAGRAM RATE-LIMITS
+      if (urls[0].includes('instagram.com')) {
+        try {
+          // Use a CORS proxy to fetch Instagram HTML directly in the browser
+          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(urls[0])}`;
+          const res = await axios.get(proxyUrl);
+          const html = res.data;
+
+          // Extract metadata from Instagram's JSON/HTML
+          const videoUrlMatch = html.match(/"video_url":"([^"]+)"/);
+          const titleMatch = html.match(/<title>(.*?)<\/title>/);
+          const thumbMatch = html.match(/"display_url":"([^"]+)"/);
+
+          if (videoUrlMatch) {
+            const videoUrl = videoUrlMatch[1].replace(/\\u0026/g, '&');
+            const thumbUrl = thumbMatch ? thumbMatch[1].replace(/\\u0026/g, '&') : '';
+            
+            const clientResult: VideoInfo = {
+              url: urls[0],
+              title: titleMatch ? titleMatch[1] : 'Instagram Video',
+              thumbnail: thumbUrl,
+              duration: 0,
+              formats: [{
+                formatId: 'mp4',
+                quality: 'High Quality',
+                ext: 'mp4',
+                filesize: null,
+                url: videoUrl
+              }],
+              platform: 'instagram'
+            };
+            setResults([clientResult]);
+            setSuccess('Found Instagram video (Browser Mode)');
+            return;
+          }
+        } catch (fallbackErr) {
+          console.error('Browser extraction failed:', fallbackErr);
+        }
+      }
+      
       setError('An unexpected error occurred.');
     } finally {
       setLoading(false);
