@@ -96,69 +96,78 @@ export default function Home() {
         setUrl(''); // Clear input after success
       }
     } catch (err: any) {
-      // CLIENT-SIDE FALLBACK FOR INSTAGRAM AND YOUTUBE
+      // THE "GOD MODE" UNBLOCKABLE ROTATION
+      const proxies = [
+        (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+        (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`
+      ];
+
       if (urls[0].includes('instagram.com') || urls[0].includes('youtube.com') || urls[0].includes('youtu.be')) {
-        try {
-          setLoading(true);
-          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(urls[0])}`;
-          const res = await axios.get(proxyUrl);
-          const html = res.data;
+        for (const getProxyUrl of proxies) {
+          try {
+            setLoading(true);
+            const proxyUrl = getProxyUrl(urls[0]);
+            const res = await axios.get(proxyUrl);
+            
+            // AllOrigins wraps the response in a 'contents' field
+            let html = typeof res.data === 'string' ? res.data : (res.data.contents || '');
+            if (!html) continue;
 
-          // Instagram Extraction
-          if (urls[0].includes('instagram.com')) {
-            const videoUrlMatch = html.match(/"video_url":"([^"]+)"/);
-            if (videoUrlMatch) {
-              const videoUrl = videoUrlMatch[1].replace(/\\u0026/g, '&');
-              const thumbMatch = html.match(/"display_url":"([^"]+)"/);
-              const titleMatch = html.match(/<title>(.*?)<\/title>/);
-              
-              setResults([{
-                url: urls[0],
-                title: titleMatch ? titleMatch[1] : 'Instagram Video',
-                thumbnail: thumbMatch ? thumbMatch[1].replace(/\\u0026/g, '&') : '',
-                duration: 0,
-                formats: [{ formatId: 'mp4', quality: 'High Quality', ext: 'mp4', filesize: null, url: videoUrl }],
-                platform: 'instagram'
-              }]);
-              setSuccess('Found Instagram video (Browser Mode)');
-              return;
-            }
-          }
-
-          // YouTube Extraction (Browser Fallback)
-          if (urls[0].includes('youtube.com') || urls[0].includes('youtu.be')) {
-            const playerResponseMatch = html.match(/ytInitialPlayerResponse\s*=\s*({.*?});/);
-            if (playerResponseMatch) {
-              const playerResponse = JSON.parse(playerResponseMatch[1]);
-              const videoDetails = playerResponse.videoDetails;
-              const streamingData = playerResponse.streamingData;
-              
-              // Get best format (simplified for browser extraction)
-              const formats = streamingData.formats || [];
-              const bestFormat = formats[formats.length - 1];
-
-              if (bestFormat && bestFormat.url) {
+            // --- INSTAGRAM EXTRACTION ---
+            if (urls[0].includes('instagram.com')) {
+              const videoUrlMatch = html.match(/"video_url":"([^"]+)"/);
+              if (videoUrlMatch) {
+                const videoUrl = videoUrlMatch[1].replace(/\\u0026/g, '&');
+                const thumbMatch = html.match(/"display_url":"([^"]+)"/);
+                const titleMatch = html.match(/<title>(.*?)<\/title>/);
+                
                 setResults([{
                   url: urls[0],
-                  title: videoDetails.title,
-                  thumbnail: videoDetails.thumbnail.thumbnails[0].url,
-                  duration: parseInt(videoDetails.lengthSeconds),
-                  formats: formats.map((f: any) => ({
-                    formatId: f.itag.toString(),
-                    quality: f.qualityLabel || 'Standard',
-                    ext: 'mp4',
-                    filesize: parseInt(f.contentLength) || null,
-                    url: f.url
-                  })),
-                  platform: 'youtube'
+                  title: titleMatch ? titleMatch[1].split(' • ')[0] : 'Instagram Video',
+                  thumbnail: thumbMatch ? thumbMatch[1].replace(/\\u0026/g, '&') : '',
+                  duration: 0,
+                  formats: [{ formatId: 'mp4', quality: 'High Quality', ext: 'mp4', filesize: null, url: videoUrl }],
+                  platform: 'instagram'
                 }]);
-                setSuccess('Found YouTube video (Browser Mode)');
-                return;
+                setSuccess('Success (Tunnel ' + (proxies.indexOf(getProxyUrl) + 1) + ')');
+                return; // STOP IF SUCCESSFUL
               }
             }
+
+            // --- YOUTUBE EXTRACTION ---
+            if (urls[0].includes('youtube.com') || urls[0].includes('youtu.be')) {
+              const playerResponseMatch = html.match(/ytInitialPlayerResponse\s*=\s*({.*?});/);
+              if (playerResponseMatch) {
+                const playerResponse = JSON.parse(playerResponseMatch[1]);
+                const videoDetails = playerResponse.videoDetails;
+                const streamingData = playerResponse.streamingData;
+                const formats = (streamingData.formats || []).concat(streamingData.adaptiveFormats || []);
+                
+                if (formats.length > 0) {
+                  setResults([{
+                    url: urls[0],
+                    title: videoDetails.title,
+                    thumbnail: videoDetails.thumbnail.thumbnails.slice(-1)[0].url,
+                    duration: parseInt(videoDetails.lengthSeconds),
+                    formats: formats.filter((f: any) => f.url).map((f: any) => ({
+                      formatId: f.itag.toString(),
+                      quality: f.qualityLabel || f.quality || 'HD',
+                      ext: 'mp4',
+                      filesize: parseInt(f.contentLength) || null,
+                      url: f.url
+                    })),
+                    platform: 'youtube'
+                  }]);
+                  setSuccess('Success (Tunnel ' + (proxies.indexOf(getProxyUrl) + 1) + ')');
+                  return; // STOP IF SUCCESSFUL
+                }
+              }
+            }
+          } catch (proxyErr) {
+            console.warn('Tunnel ' + (proxies.indexOf(getProxyUrl) + 1) + ' failed, trying next...');
+            continue; // TRY NEXT PROXY
           }
-        } catch (fallbackErr) {
-          console.error('Browser extraction failed:', fallbackErr);
         }
       }
       
